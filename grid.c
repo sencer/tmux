@@ -269,6 +269,9 @@ grid_free_lines(struct grid *gd, u_int py, u_int ny)
 
 	for (yy = py; yy < py + ny; yy++)
 		grid_free_line(gd, yy);
+#ifdef HAVE_MALLOC_TRIM
+	malloc_trim(0);
+#endif
 }
 
 /* Create a new grid. */
@@ -702,7 +705,6 @@ grid_move_lines(struct grid *gd, u_int dy, u_int py, u_int ny, u_int bg)
 	if (py != 0 && (py < dy || py >= dy + ny))
 		gd->linedata[py - 1].flags &= ~GRID_LINE_WRAPPED;
 }
-
 
 /* Move a group of cells. */
 void

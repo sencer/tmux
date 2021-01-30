@@ -250,6 +250,7 @@ static const struct tty_term_code_entry tty_term_codes[] = {
 	[TTYC_KUP6] = { TTYCODE_STRING, "kUP6" },
 	[TTYC_KUP7] = { TTYCODE_STRING, "kUP7" },
 	[TTYC_MS] = { TTYCODE_STRING, "Ms" },
+	[TTYC_OL] = { TTYCODE_STRING, "ol" },
 	[TTYC_OP] = { TTYCODE_STRING, "op" },
 	[TTYC_REV] = { TTYCODE_STRING, "rev" },
 	[TTYC_RGB] = { TTYCODE_FLAG, "RGB" },
@@ -260,6 +261,7 @@ static const struct tty_term_code_entry tty_term_codes[] = {
 	[TTYC_RMKX] = { TTYCODE_STRING, "rmkx" },
 	[TTYC_SETAB] = { TTYCODE_STRING, "setab" },
 	[TTYC_SETAF] = { TTYCODE_STRING, "setaf" },
+	[TTYC_SETAL] = { TTYCODE_STRING, "setal" },
 	[TTYC_SETRGBB] = { TTYCODE_STRING, "setrgbb" },
 	[TTYC_SETRGBF] = { TTYCODE_STRING, "setrgbf" },
 	[TTYC_SETULC] = { TTYCODE_STRING, "Setulc" },
@@ -584,6 +586,9 @@ tty_term_create(struct tty *tty, char *name, int *feat, int fd, char **cause)
 	    (!tty_term_has(term, TTYC_SETRGBF) ||
 	    !tty_term_has(term, TTYC_SETRGBB)))
 		tty_add_features(feat, "RGB", ",");
+	if (tty_term_has(term, TTYC_SETRGBF) &&
+	    tty_term_has(term, TTYC_SETRGBB))
+		term->flags |= TERM_RGBCOLOURS;
 
 	/* Apply the features and overrides again. */
 	tty_apply_features(term, *feat);

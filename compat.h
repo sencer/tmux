@@ -27,6 +27,23 @@
 #include <termios.h>
 #include <wchar.h>
 
+#ifdef HAVE_EVENT2_EVENT_H
+#include <event2/event.h>
+#include <event2/event_compat.h>
+#include <event2/event_struct.h>
+#include <event2/buffer.h>
+#include <event2/buffer_compat.h>
+#include <event2/bufferevent.h>
+#include <event2/bufferevent_struct.h>
+#include <event2/bufferevent_compat.h>
+#else
+#include <event.h>
+#endif
+
+#ifdef HAVE_MALLOC_TRIM
+#include <malloc.h>
+#endif
+
 #ifdef HAVE_UTF8PROC
 #include <utf8proc.h>
 #endif
@@ -47,6 +64,9 @@
 #endif
 #ifndef __packed
 #define __packed __attribute__ ((__packed__))
+#endif
+#ifndef __weak
+#define __weak __attribute__ ((__weak__))
 #endif
 
 #ifndef ECHOPRT
@@ -104,6 +124,10 @@ void	warnx(const char *, ...);
 
 #ifndef __OpenBSD__
 #define pledge(s, p) (0)
+#endif
+
+#ifndef IMAXBEL
+#define IMAXBEL 0
 #endif
 
 #ifdef HAVE_STDINT_H
@@ -385,6 +409,11 @@ void		*recallocarray(void *, size_t, size_t, size_t);
 int		 utf8proc_wcwidth(wchar_t);
 int		 utf8proc_mbtowc(wchar_t *, const char *, size_t);
 int		 utf8proc_wctomb(char *, wchar_t);
+#endif
+
+#ifdef NEED_FUZZING
+/* tmux.c */
+#define main __weak main
 #endif
 
 /* getopt.c */

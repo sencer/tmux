@@ -191,6 +191,11 @@ directories are missing).
 Behave as a login shell.
 This flag currently has no effect and is for compatibility with other shells
 when using tmux as a login shell.
+.It Fl N
+Do not start the server even if the command would normally do so (for example
+.Ic new-session
+or
+.Ic start-server ) .
 .It Fl S Ar socket-path
 Specify a full alternative path to the server socket.
 If
@@ -1003,7 +1008,7 @@ wait for an empty line input before exiting in control mode
 .El
 .Pp
 A leading
-.Ql !
+.Ql \&!
 turns a flag off if the client is already attached.
 .Fl r
 is an alias for
@@ -1652,6 +1657,8 @@ The following commands are supported in copy mode:
 .It Li "previous-paragraph" Ta "{" Ta "M-{"
 .It Li "previous-space" Ta "B" Ta ""
 .It Li "previous-word" Ta "b" Ta "M-b"
+.It Li "rectangle-on" Ta "" Ta ""
+.It Li "rectangle-off" Ta "" Ta ""
 .It Li "rectangle-toggle" Ta "v" Ta "R"
 .It Li "refresh-from-pane" Ta "r" Ta "r"
 .It Li "scroll-down" Ta "C-e" Ta "C-Down"
@@ -1858,7 +1865,7 @@ The
 .Fl P
 option prints information about the new window after it has been created.
 By default, it uses the format
-.Ql #{session_name}:#{window_index}
+.Ql #{session_name}:#{window_index}.#{pane_index}
 but a different format may be specified with
 .Fl F .
 .It Xo Ic capture-pane
@@ -2098,7 +2105,7 @@ starts without the option information.
 This command works only if at least one client is attached.
 .It Xo
 .Ic display-panes
-.Op Fl b
+.Op Fl bN
 .Op Fl d Ar duration
 .Op Fl t Ar target-client
 .Op Ar template
@@ -2111,7 +2118,9 @@ See the
 and
 .Ic display-panes-active-colour
 session options.
-The indicator is closed when a key is pressed or
+The indicator is closed when a key is pressed (unless
+.Fl N
+is given) or
 .Ar duration
 milliseconds have passed.
 If
@@ -3134,7 +3143,7 @@ abc123
 Commands which set options are as follows:
 .Bl -tag -width Ds
 .It Xo Ic set-option
-.Op Fl aFgopqsuw
+.Op Fl aFgopqsuUw
 .Op Fl t Ar target-pane
 .Ar option Ar value
 .Xc
@@ -3167,6 +3176,11 @@ flag unsets an option, so a session inherits the option from the global
 options (or with
 .Fl g ,
 restores a global option to the default).
+.Fl U
+unsets an option (like
+.Fl u )
+but if the option is a pane option also unsets the option on any panes in the
+window.
 .Ar value
 depends on the option and may be a number, a string, or a flag (on, off, or
 omitted to toggle).
@@ -4060,12 +4074,6 @@ see the
 section.
 Attributes are ignored.
 .Pp
-.It Xo Ic synchronize-panes
-.Op Ic on | off
-.Xc
-Duplicate input to any pane to all other panes in the same window (only
-for panes that are not in any special mode).
-.Pp
 .It Ic window-status-activity-style Ar style
 Set status line style for windows with an activity alert.
 For how to specify
@@ -4180,13 +4188,22 @@ interactive application starts and restores it on exit, so that any output
 visible before the application starts reappears unchanged after it exits.
 .Pp
 .It Xo Ic remain-on-exit
-.Op Ic on | off
+.Op Ic on | off | failed
 .Xc
 A pane with this flag set is not destroyed when the program running in it
 exits.
+If set to
+.Ic failed ,
+then only when the program exit status is not zero.
 The pane may be reactivated with the
 .Ic respawn-pane
 command.
+.Pp
+.It Xo Ic synchronize-panes
+.Op Ic on | off
+.Xc
+Duplicate input to all other panes in the same window where this option is also
+on (only for panes that are not in any mode).
 .Pp
 .It Ic window-active-style Ar style
 Set the pane style when it is the active pane.
@@ -4544,7 +4561,7 @@ multiplication
 .Ql * ,
 division
 .Ql / ,
-and modulus
+modulus
 .Ql m
 or
 .Ql %
@@ -4553,7 +4570,15 @@ or
 must be escaped as
 .Ql %%
 in formats which are also expanded by
-.Xr strftime 3 ) .
+.Xr strftime 3 )
+and numeric comparison operators
+.Ql == ,
+.Ql != ,
+.Ql < ,
+.Ql <= ,
+.Ql >
+and
+.Ql >= .
 For example,
 .Ql #{e|*|f|4:5.5,3}
 multiplies 5.5 by 3 for a result with four decimal places and
@@ -4583,7 +4608,9 @@ pads the string to a given width, for example
 will result in a width of at least 10 characters.
 A positive width pads on the left, a negative on the right.
 .Ql n
-expands to the length of the variable, for example
+expands to the length of the variable and
+.Ql w
+to its width when displayed, for example
 .Ql #{n:window_name} .
 .Pp
 Prefixing a time variable with
@@ -4626,7 +4653,12 @@ of the variable respectively.
 .Ql q:\&
 will escape
 .Xr sh 1
-special characters.
+special characters or with a
+.Ql h
+suffix, escape hash characters (so
+.Ql #
+becomes
+.Ql ## ) .
 .Ql E:\&
 will expand the format twice, for example
 .Ql #{E:status-left}
@@ -4791,7 +4823,6 @@ The following variables are available, where appropriate:
 .It Li "pane_pipe" Ta "" Ta "1 if pane is being piped"
 .It Li "pane_right" Ta "" Ta "Right of pane"
 .It Li "pane_search_string" Ta "" Ta "Last search string in copy mode"
-.It Li "pane_skipped" Ta "" Ta "Bytes skipped as not visible in pane"
 .It Li "pane_start_command" Ta "" Ta "Command pane started with"
 .It Li "pane_synchronized" Ta "" Ta "1 if pane is synchronized"
 .It Li "pane_tabs" Ta "" Ta "Pane tab positions"
@@ -4799,7 +4830,6 @@ The following variables are available, where appropriate:
 .It Li "pane_top" Ta "" Ta "Top of pane"
 .It Li "pane_tty" Ta "" Ta "Pseudo terminal of pane"
 .It Li "pane_width" Ta "" Ta "Width of pane"
-.It Li "pane_written" Ta "" Ta "Bytes written by pane (aside from redrawing)"
 .It Li "pid" Ta "" Ta "Server PID"
 .It Li "popup_key" Ta "" Ta "Key pressed in popup"
 .It Li "popup_mouse_x" Ta "" Ta "Mouse X position in popup"
@@ -4852,7 +4882,8 @@ The following variables are available, where appropriate:
 .It Li "window_cell_height" Ta "" Ta "Height of each cell in pixels"
 .It Li "window_cell_width" Ta "" Ta "Width of each cell in pixels"
 .It Li "window_end_flag" Ta "" Ta "1 if window has the highest index"
-.It Li "window_flags" Ta "#F" Ta "Window flags"
+.It Li "window_flags" Ta "#F" Ta "Window flags with # escaped as ##"
+.It Li "window_raw_flags" Ta "" Ta "Window flags with nothing escaped"
 .It Li "window_format" Ta "" Ta "1 if format is for a window"
 .It Li "window_height" Ta "" Ta "Height of window"
 .It Li "window_id" Ta "" Ta "Unique window ID"
@@ -5331,6 +5362,7 @@ option.
 This command works only from inside
 .Nm .
 .It Xo Ic display-menu
+.Op Fl O
 .Op Fl c Ar target-client
 .Op Fl t Ar target-pane
 .Op Fl T Ar title
@@ -5379,11 +5411,39 @@ Both may be a row or column number, or one of the following special values:
 .It Li "S" Ta Fl y Ta "The line above or below the status line"
 .El
 .Pp
+Or a format, which is expanded including the following additional variables:
+.Bl -column "XXXXXXXXXXXXXXXXXXXXXXXXXX" -offset indent
+.It Sy "Variable name" Ta Sy "Replaced with"
+.It Li "popup_centre_x" Ta "Centered in the client"
+.It Li "popup_centre_y" Ta "Centered in the client"
+.It Li "popup_height" Ta "Height of menu or popup"
+.It Li "popup_mouse_bottom" Ta "Bottom of at the mouse"
+.It Li "popup_mouse_centre_x" Ta "Horizontal centre at the mouse"
+.It Li "popup_mouse_centre_y" Ta "Vertical centre at the mouse"
+.It Li "popup_mouse_top" Ta "Top at the mouse"
+.It Li "popup_mouse_x" Ta "Mouse X position"
+.It Li "popup_mouse_y" Ta "Mouse Y position"
+.It Li "popup_pane_bottom" Ta "Bottom of the pane"
+.It Li "popup_pane_left" Ta "Left of the pane"
+.It Li "popup_pane_right" Ta "Right of the pane"
+.It Li "popup_pane_top" Ta "Top of the pane"
+.It Li "popup_status_line_y" Ta "Above or below the status line"
+.It Li "popup_width" Ta "Width of menu or popup"
+.It Li "popup_window_status_line_x" Ta "At the window position in status line"
+.It Li "popup_window_status_line_y" Ta "At the status line showing the window"
+.El
+.Pp
 Each menu consists of items followed by a key shortcut shown in brackets.
 If the menu is too large to fit on the terminal, it is not displayed.
 Pressing the key shortcut chooses the corresponding item.
-If the mouse is enabled and the menu is opened from a mouse key binding, releasing
-the mouse button with an item selected will choose that item.
+If the mouse is enabled and the menu is opened from a mouse key binding,
+releasing the mouse button with an item selected chooses that item and
+releasing the mouse button without an item selected closes the menu.
+.Fl O
+changes this behaviour so that the menu does not close when the mouse button is
+released without an item selected the menu is not closed and a mouse button
+must be clicked to choose an item.
+.Pp
 The following keys are also available:
 .Bl -column "Key" "Function" -offset indent
 .It Sy "Key" Ta Sy "Function"
@@ -5776,7 +5836,7 @@ Lock each client individually by running the command specified by the
 .Ic lock-command
 option.
 .It Xo Ic run-shell
-.Op Fl b
+.Op Fl bC
 .Op Fl d Ar delay
 .Op Fl t Ar target-pane
 .Op Ar shell-command
@@ -5784,9 +5844,14 @@ option.
 .D1 (alias: Ic run )
 Execute
 .Ar shell-command
-in the background without creating a window.
-Before being executed, shell-command is expanded using the rules specified in
-the
+or (with
+.Fl C )
+a
+.Nm
+command in the background without creating a window.
+Before being executed,
+.Ar shell-command
+is expanded using the rules specified in the
 .Sx FORMATS
 section.
 With
@@ -5796,11 +5861,13 @@ the command is run in the background.
 waits for
 .Ar delay
 seconds before starting the command.
-After the command finishes, any output to stdout is displayed in view mode (in
-the pane specified by
+If
+.Fl C
+is not given, any output to stdout is displayed in view mode (in the pane
+specified by
 .Fl t
-or the current pane if omitted).
-If the command doesn't return success, the exit status is also displayed.
+or the current pane if omitted) after the command finishes.
+If the command fails, the exit status is also displayed.
 .It Xo Ic wait-for
 .Op Fl L | S | U
 .Ar channel
@@ -5897,8 +5964,8 @@ Set a styled underscore.
 The single parameter is one of: 0 for no underscore, 1 for normal
 underscore, 2 for double underscore, 3 for curly underscore, 4 for dotted
 underscore and 5 for dashed underscore.
-.It Em \&Setulc
-Set the underscore colour.
+.It Em \&Setulc , \&ol
+Set the underscore colour or reset to the default.
 The argument is (red * 65536) + (green * 256) + blue where each is between 0
 and 255.
 .It Em \&Ss , Se

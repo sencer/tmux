@@ -21,7 +21,6 @@
 #include <sys/uio.h>
 
 #include <errno.h>
-#include <event.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +39,7 @@ static void	server_client_repeat_timer(int, short, void *);
 static void	server_client_click_timer(int, short, void *);
 static void	server_client_check_exit(struct client *);
 static void	server_client_check_redraw(struct client *);
+static void	server_client_check_modes(struct client *);
 static void	server_client_set_title(struct client *);
 static void	server_client_reset_state(struct client *);
 static int	server_client_assume_paste(struct session *);
@@ -1353,6 +1353,7 @@ server_client_loop(void)
 	TAILQ_FOREACH(c, &clients, entry) {
 		server_client_check_exit(c);
 		if (c->session != NULL) {
+			server_client_check_modes(c);
 			server_client_check_redraw(c);
 			server_client_reset_state(c);
 		}
@@ -1588,10 +1589,6 @@ server_client_check_pane_focus(struct window_pane *wp)
 	if (wp->window->active != wp)
 		goto not_focused;
 
-	/* If we're in a mode, we're not focused. */
-	if (wp->screen != &wp->base)
-		goto not_focused;
-
 	/*
 	 * If our window is the current window in any focused clients with an
 	 * attached session, we're focused.
@@ -1691,8 +1688,8 @@ server_client_reset_state(struct client *c)
 	 * mode.
 	 */
 	if (options_get_number(oo, "mouse")) {
-		mode &= ~ALL_MOUSE_MODES;
 		if (c->overlay_draw == NULL) {
+			mode &= ~ALL_MOUSE_MODES;
 			TAILQ_FOREACH(loop, &w->panes, entry) {
 				if (loop->screen->mode & MODE_MOUSE_ALL)
 					mode |= MODE_MOUSE_ALL;
@@ -1781,11 +1778,11 @@ server_client_check_exit(struct client *c)
 
 	switch (c->exit_type) {
 	case CLIENT_EXIT_RETURN:
-		if (c->exit_message != NULL) {
+		if (c->exit_message != NULL)
 			msize = strlen(c->exit_message) + 1;
-			size = (sizeof c->retval) + msize;
-		} else
-			size = (sizeof c->retval);
+		else
+			msize = 0;
+		size = (sizeof c->retval) + msize;
 		data = xmalloc(size);
 		memcpy(data, &c->retval, sizeof c->retval);
 		if (c->exit_message != NULL)
@@ -1810,6 +1807,28 @@ server_client_redraw_timer(__unused int fd, __unused short events,
     __unused void *data)
 {
 	log_debug("redraw timer fired");
+}
+
+/*
+ * Check if modes need to be updated. Only modes in the current window are
+ * updated and it is done when the status line is redrawn.
+ */
+static void
+server_client_check_modes(struct client *c)
+{
+	struct window			*w = c->session->curw->window;
+	struct window_pane		*wp;
+	struct window_mode_entry	*wme;
+
+	if (c->flags & (CLIENT_CONTROL|CLIENT_SUSPENDED))
+		return;
+	if (~c->flags & CLIENT_REDRAWSTATUS)
+		return;
+	TAILQ_FOREACH(wp, &w->panes, entry) {
+		wme = TAILQ_FIRST(&wp->modes);
+		if (wme != NULL && wme->mode->update != NULL)
+			wme->mode->update(wme);
+	}
 }
 
 /* Check for client redraws. */
@@ -2027,7 +2046,7 @@ server_client_dispatch(struct imsg *imsg, void *arg)
 			break;
 		c->flags &= ~CLIENT_SUSPENDED;
 
-		if (c->fd == -1) /* exited in the meantime */
+		if (c->fd == -1 || c->session == NULL) /* exited already */
 			break;
 		s = c->session;
 
@@ -2245,7 +2264,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	c->fd = open(c->ttyname, O_RDWR|O_NOCTTY);
 #endif
 
-	 if (c->flags & CLIENT_CONTROL)
+	if (c->flags & CLIENT_CONTROL)
 		control_start(c);
 	else if (c->fd != -1) {
 		if (tty_init(&c->tty, c) != 0) {
@@ -2260,13 +2279,13 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	}
 
 	/*
-	 * If this is the first client that has finished identifying, load
-	 * configuration files.
+	 * If this is the first client, load configuration files. Any later
+	 * clients are allowed to continue with their command even if the
+	 * config has not been loaded - they might have been run from inside it
 	 */
 	if ((~c->flags & CLIENT_EXIT) &&
-	    !cfg_finished &&
-	    c == TAILQ_FIRST(&clients) &&
-	    TAILQ_NEXT(c, entry) == NULL)
+	     !cfg_finished &&
+	     c == TAILQ_FIRST(&clients))
 		start_cfg();
 }
 
